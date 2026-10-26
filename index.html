@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>雪球大作戰 Snowball Arena</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#0b3d6b;color:#fff;user-select:none;touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(6,40,80,.72);backdrop-filter:blur(4px);padding:16px;overflow:auto;text-align:center}
+.screen.on{display:flex}
+h1{margin:0;font-size:clamp(32px,7vw,56px);text-shadow:0 4px 0 #0a2a4d}
+h2{margin:0}
+button,input,select{font:inherit;border-radius:12px;border:0;padding:12px 20px}
+button{background:#4fc3f7;color:#012;font-weight:700;cursor:pointer;min-width:200px;box-shadow:0 4px 0 #1c7fb0}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #1c7fb0}
+button.sec{background:#cfe9f7;box-shadow:0 4px 0 #8fb6cc}
+button.red{background:#ef5350;color:#fff;box-shadow:0 4px 0 #a52a28}
+button:disabled{opacity:.45}
+input,select{background:#fff;color:#012;text-align:center;min-width:200px}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center}
+.card{background:rgba(255,255,255,.12);border-radius:16px;padding:14px 18px;min-width:260px;max-width:92vw}
+.pl{display:flex;align-items:center;gap:8px;padding:5px 0;justify-content:flex-start}
+.dot{width:18px;height:18px;border-radius:50%;border:2px solid #fff;flex:none}
+.skins{display:grid;grid-template-columns:repeat(4,86px);gap:10px}
+.sk{background:rgba(255,255,255,.15);border-radius:12px;padding:8px;font-size:12px;border:3px solid transparent;cursor:pointer}
+.sk.sel{border-color:#ffd54f}.sk.lock{opacity:.5}
+.sk .dot{width:44px;height:44px;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:20px}
+#top{position:fixed;top:8px;right:8px;display:none;gap:8px;z-index:5}
+#top button{min-width:0;padding:6px 12px;font-size:14px}
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#000a;padding:10px 18px;border-radius:12px;display:none;z-index:9}
+#banner{position:fixed;top:30%;left:0;right:0;text-align:center;font-size:clamp(28px,6vw,52px);font-weight:800;text-shadow:0 4px 0 #0a2a4d;pointer-events:none;display:none}
+.small{font-size:13px;opacity:.85}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top"><button class="sec" id="btnSnd">🔊</button><button class="red" id="btnLeave">離開</button></div>
+<div id="toast"></div><div id="banner"></div>
+
+<div class="screen on" id="menu">
+  <h1>❄️ 雪球大作戰 ❄️</h1>
+  <div class="small">滾大雪球,把對手撞下冰面!</div>
+  <input id="nick" maxlength="8" placeholder="你的暱稱">
+  <button id="bSingle">🤖 單人模式</button>
+  <button id="bMulti">🌐 多人連線</button>
+  <button class="sec" id="bSkins">🎨 造型 / XP</button>
+  <button class="sec" id="bHow">❓ 玩法說明</button>
+  <div class="small" id="xpInfo"></div>
+</div>
+
+<div class="screen" id="single">
+  <h2>單人模式</h2>
+  <div class="card">
+    <div class="row">難度 <select id="sDiff"><option value="easy">簡單</option><option value="normal">普通</option></select></div><br>
+    <div class="row">對手人數 <select id="sBots"><option>2</option><option selected>3</option><option>5</option><option>7</option></select></div><br>
+    <div class="row">賽制 <select id="sRounds"><option value="1">快速對戰(1回合)</option><option value="3">錦標賽(3回合)</option></select></div>
+  </div>
+  <button id="sStart">開始!</button><button class="sec" data-back>返回</button>
+</div>
+
+<div class="screen" id="multi">
+  <h2>多人連線</h2>
+  <div class="small" id="netWarn"></div>
+  <button id="mQuick">⚡ 線上隨機配對</button>
+  <div class="card">
+    <b>建立房間</b><br><br>
+    <div class="row">賽制 <select id="mRounds"><option value="1">1回合</option><option value="3">錦標賽3回合</option></select>
+    人數上限 <select id="mMax"><option>2</option><option>4</option><option selected>6</option><option>8</option></select></div><br>
+    <button id="mCreate">建立房間</button>
+  </div>
+  <div class="card"><b>加入房間</b><br><br>
+    <div class="row"><input id="mCode" inputmode="numeric" maxlength="4" placeholder="4位數房號"><button id="mJoin" style="min-width:100px">加入</button></div>
+  </div>
+  <button class="sec" data-back>返回</button>
+</div>
+
+<div class="screen" id="lobby">
+  <h2>房間 <span id="lbCode"></span></h2>
+  <div class="small" id="lbInfo"></div>
+  <div class="card" id="lbList"></div>
+  <div id="lbCd" style="font-size:22px"></div>
+  <button id="lbStart">開始遊戲</button>
+  <button class="red" id="lbLeave">離開房間</button>
+</div>
+
+<div class="screen" id="skins">
+  <h2>造型</h2><div class="small" id="skXp"></div>
+  <div class="skins" id="skGrid"></div>
+  <button class="sec" data-back>返回</button>
+</div>
+
+<div class="screen" id="how">
+  <h2>玩法說明</h2>
+  <div class="card" style="text-align:left;line-height:1.7">
+    🖱️ 按住滑鼠(或手指)往想去的方向移動,雪球會越滾越大。<br>
+    🎯 放開就把雪球射出去;球越大擊退越強,但飛得越慢。<br>
+    💥 也可以直接用雪球撞對手。<br>
+    🧊 冰面會從外圈閃紅後消失,別掉下去!<br>
+    🏆 最後留在冰上的人獲勝。<br>
+    🛡️護盾 ⚡加速 ⛄巨大雪球 ❄️冰凍周圍敵人<br>
+    ⭐ 比賽可獲得 XP,解鎖新造型。
+  </div>
+  <button class="sec" data-back>返回</button>
+</div>
+
+<div class="screen" id="result">
+  <h1 id="rsTitle"></h1>
+  <div class="card" id="rsList"></div>
+  <div id="rsXp"></div>
+  <button id="rsAgain">再來一場</button>
+  <button class="sec" id="rsMenu">回主選單</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ===== 1. 貼上你的 Firebase 設定(多人模式用) ===== */
+const FIREBASE_CONFIG = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  appId: "YOUR_APP_ID"
+};
+
+/* ===== 常數與工具 ===== */
+const TAU=Math.PI*2,R=300,RINGS=4,SECT=12,PR=16,MAXB=46;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const angDiff=(t,c)=>((t-c+Math.PI)%TAU+TAU)%TAU-Math.PI;
+const $=id=>document.getElementById(id);
+const SKINS=[
+ {n:'藍藍',c:'#4fc3f7',a:'',xp:0},{n:'小紅',c:'#ef5350',a:'',xp:40},
+ {n:'小綠',c:'#66bb6a',a:'',xp:100},{n:'紳士',c:'#ffd54f',a:'🎩',xp:180},
+ {n:'酷酷',c:'#ab47bc',a:'😎',xp:280},{n:'國王',c:'#ff9800',a:'👑',xp:400},
+ {n:'音樂',c:'#26c6da',a:'🎧',xp:560},{n:'火箭',c:'#ec407a',a:'🚀',xp:780}];
+const BOTN=['小白','雪人','企鵝','北極熊','冰冰','小藍','阿雪','寒寒'];
+const UPS=['shield','speed','giant','freeze'];
+const UPE={shield:'🛡️',speed:'⚡',giant:'⛄',freeze:'❄️'};
+
+/* ===== 遊戲模擬(單人 / 房主執行) ===== */
+class Sim{
+ constructor(plist,o){this.meta=plist;this.rounds=o.rounds||1;this.diff=o.diff||'easy';this.rd=0;this.scores={};this.evid=0;this.evs=[];plist.forEach(p=>this.scores[p.id]=0);this.startRound();}
+ startRound(){
+  this.rd++;this.t=0;this.phase='count';this.cd=3;this.balls=[];this.ups=[];this.nid=1;this.winner=null;this.res=[];
+  this.tiles=new Array(RINGS*SECT).fill(0);this.tt=new Array(RINGS*SECT).fill(0);
+  this.nextC=5;this.nextU=3;const n=this.meta.length;
+  this.P=this.meta.map((m,i)=>{const a=i/n*TAU,r=R*.6;return{id:m.id,bot:!!m.bot,x:Math.cos(a)*r,y:Math.sin(a)*r,vx:0,vy:0,ang:a+Math.PI,tgt:a+Math.PI,br:10,st:0,hold:false,lastS:(this.P&&this.P[i]?this.P[i].lastS:0),shield:0,speed:0,frozen:0,kills:0,lastHit:null,lastHitT:0,fallT:0,place:0,gone:!!(this.P&&this.P[i]&&this.P[i].gone),cool:{},ai:{t:Math.random(),lastShot:-9}}});
+  this.P.forEach(p=>{if(p.gone){p.st=2;p.place=n}});
+ }
+ addEv(type,x,y,k){this.evs.push([++this.evid,type,+x.toFixed(0),+y.toFixed(0),k||0]);if(this.evs.length>14)this.evs.shift();}
+ onIce(x,y){const d=Math.hypot(x,y);if(d>=R)return false;const ring=Math.min(RINGS-1,Math.floor(d/(R/RINGS)));let a=Math.atan2(y,x);if(a<0)a+=TAU;const sec=Math.floor(a/(TAU/SECT))%SECT;return this.tiles[ring*SECT+sec]!==2;}
+ safe(x,y){const d=Math.hypot(x,y);if(d>=R-25)return false;const ring=Math.min(RINGS-1,Math.floor(d/(R/RINGS)));let a=Math.atan2(y,x);if(a<0)a+=TAU;const sec=Math.floor(a/(TAU/SECT))%SECT;return this.tiles[ring*SECT+sec]===0;}
+ input(id,i){const p=this.P.find(q=>q.id===id);if(!p||p.st!==0)return;p.tgt=+i.a||0;p.hold=!!i.h;if((i.s||0)>p.lastS){p.lastS=i.s;p.ang=p.tgt;this.shoot(p);}}
+ remove(id){const p=this.P.find(q=>q.id===id);if(!p||p.gone)return;p.gone=true;if(p.st===0){p.st=1;p.fallT=0;p.place=this.P.filter(q=>q.st===0).length+1;}}
+ shoot(p){
+  if(p.st!==0||p.frozen>0||p.br<8||this.phase==='count')return;
+  const spd=480-6*p.br,c=Math.cos(p.ang),s=Math.sin(p.ang);
+  this.balls.push({id:this.nid++,x:p.x+c*(PR+p.br),y:p.y+s*(PR+p.br),vx:c*spd+p.vx*.3,vy:s*spd+p.vy*.3,r:p.br,owner:p.id,age:0,dead:false,cool:{}});
+  p.vx-=c*p.br*5;p.vy-=s*p.br*5;p.br=0;this.addEv('shoot',p.x,p.y);
+ }
+ collapse(n){
+  for(let k=0;k<n;k++){
+   let hi=-1;for(let r=RINGS-1;r>=0;r--){if(this.tiles.slice(r*SECT,r*SECT+SECT).some(v=>v===0)){hi=r;break;}}
+   if(hi<0)return;const c=[];for(let s=0;s<SECT;s++)if(this.tiles[hi*SECT+s]===0)c.push(hi*SECT+s);
+   const i=c[Math.floor(Math.random()*c.length)];this.tiles[i]=1;this.tt[i]=1.6;
+  }
+ }
+ ai(p,dt){
+  const a=p.ai,easy=this.diff==='easy';a.t-=dt;if(a.t>0)return;
+  a.t=(easy?.6:.35)+Math.random()*(easy?.5:.3);
+  const ax=p.x+Math.cos(p.ang)*70,ay=p.y+Math.sin(p.ang)*70;
+  if(!this.safe(p.x,p.y)||!this.safe(ax,ay)){p.tgt=Math.atan2(-p.y,-p.x)+(Math.random()-.5)*.5;p.hold=true;return;}
+  if(this.ups.length&&Math.random()<.4){let u=this.ups[0],bd=1e9;for(const q of this.ups){const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;u=q;}}p.tgt=Math.atan2(u.y-p.y,u.x-p.x);p.hold=true;return;}
+  let best=null,bd=1e9;for(const q of this.P){if(q===p||q.st!==0)continue;const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;best=q;}}
+  if(best){
+   const aim=Math.atan2(best.y-p.y,best.x-p.x)+(Math.random()-.5)*(easy?1.0:.55);
+   if(p.br>=16&&bd<250&&this.t-a.lastShot>(easy?3:2)&&Math.random()<(easy?.45:.65)){p.ang=aim;p.tgt=aim;this.shoot(p);a.lastShot=this.t;p.hold=true;return;}
+   const r=Math.random();
+   if(r<(easy?.3:.15)){p.hold=false;return;}
+   if(r<.6){p.tgt=Math.random()*TAU;p.hold=true;return;}
+   p.tgt=aim;p.hold=true;
+  }else{p.tgt=Math.random()*TAU;p.hold=true;}
+ }
+ finishRound(){
+  this.phase='end';this.endT=3.5;const n=this.P.length;
+  for(const p of this.P)if(p.st===0)p.place=1;
+  const s=this.P.find(p=>p.st===0)||this.P.find(p=>p.place===1);this.winner=s?s.id:null;
+  this.res=this.P.slice().sort((a,b)=>a.place-b.place).map(p=>{const pts=(n-p.place+1)*3+p.kills;this.scores[p.id]+=pts;return{id:p.id,pl:p.place,k:p.kills,pts}});
+ }
+ step(dt){
+  const ph=this.phase;if(ph==='over')return;
+  if(ph==='count'){this.cd-=dt;if(this.cd<=0){this.phase='play';this.cd=0;this.addEv('go',0,0);}return;}
+  if(ph==='end')this.endT-=dt;else this.t+=dt;
+  if(ph==='play'){
+   this.nextC-=dt;if(this.nextC<=0){this.collapse(2);this.nextC=Math.max(.9,2.6-this.t/40);}
+   this.nextU-=dt;if(this.nextU<=0){this.nextU=6;if(this.ups.length<3)for(let i=0;i<20;i++){const a=Math.random()*TAU,r=Math.sqrt(Math.random())*R*.8,x=Math.cos(a)*r,y=Math.sin(a)*r;if(this.safe(x,y)){this.ups.push({id:this.nid++,x,y,type:UPS[Math.floor(Math.random()*4)]});break;}}}
+   if(this.t>170)this.collapse(3);
+  }
+  for(let i=0;i<this.tiles.length;i++)if(this.tiles[i]===1){this.tt[i]-=dt;if(this.tt[i]<=0)this.tiles[i]=2;}
+  const P=this.P;
+  for(const p of P){
+   if(p.st===2)continue;
+   if(p.st===1){p.fallT+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.fallT>.9)p.st=2;continue;}
+   if(p.shield>0)p.shield-=dt;if(p.speed>0)p.speed-=dt;
+   if(p.bot){if(ph==='play')this.ai(p,dt);else p.hold=false;}
+   if(p.frozen>0){p.frozen-=dt;}
+   else{
+    p.ang+=clamp(angDiff(p.tgt,p.ang),-7*dt,7*dt);
+    if(p.hold){const ac=p.speed>0?560:380;p.vx+=Math.cos(p.ang)*ac*dt;p.vy+=Math.sin(p.ang)*ac*dt;p.br=Math.min(MAXB,p.br+6*dt);}
+   }
+   const f=Math.exp(-(p.frozen>0?4:2.7)*dt);p.vx*=f;p.vy*=f;
+   const sp=Math.hypot(p.vx,p.vy);if(sp>700){p.vx*=700/sp;p.vy*=700/sp;}
+   p.x+=p.vx*dt;p.y+=p.vy*dt;
+   for(let i=this.ups.length-1;i>=0;i--){const u=this.ups[i];if(Math.hypot(u.x-p.x,u.y-p.y)<PR+12){
+    this.ups.splice(i,1);this.addEv('up',u.x,u.y);
+    if(u.type==='shield')p.shield=5;else if(u.type==='speed')p.speed=6;else if(u.type==='giant')p.br=MAXB;
+    else{for(const q of P)if(q!==p&&q.st===0&&Math.hypot(q.x-p.x,q.y-p.y)<180){q.frozen=2;}this.addEv('freeze',p.x,p.y);}
+   }}
+   if(!this.onIce(p.x,p.y)){
+    p.st=1;p.fallT=0;p.place=P.filter(q=>q.st===0).length+1;
+    if(p.lastHit&&p.lastHit!==p.id&&this.t-p.lastHitT<5){const k=P.find(q=>q.id===p.lastHit);if(k)k.kills++;}
+    this.addEv('fall',p.x,p.y);
+   }
+  }
+  for(let i=0;i<P.length;i++)for(let j=0;j<P.length;j++){
+   if(i===j)continue;const a=P[i],b=P[j];if(a.st!==0||b.st!==0)continue;
+   let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||.01;
+   if(i<j&&d<PR*2){const o=(PR*2-d)/2,nx=dx/d,ny=dy/d;a.x-=nx*o;a.y-=ny*o;b.x+=nx*o;b.y+=ny*o;a.vx-=nx*40;a.vy-=ny*40;b.vx+=nx*40;b.vy+=ny*40;}
+   if(a.br>=4&&(a.cool[b.id]||0)<this.t){
+    const bx=a.x+Math.cos(a.ang)*(PR+a.br*.8),by=a.y+Math.sin(a.ang)*(PR+a.br*.8);
+    const ex=b.x-bx,ey=b.y-by,ed=Math.hypot(ex,ey)||.01;
+    if(ed<a.br+PR){
+     const nx=ex/ed,ny=ey/ed,rs=Math.max(0,(a.vx-b.vx)*nx+(a.vy-b.vy)*ny);
+     let k=200+a.br*10+rs*.6;if(b.shield>0)k*=.2;else{b.lastHit=a.id;b.lastHitT=this.t;}
+     b.vx+=nx*k;b.vy+=ny*k;a.vx-=nx*k*.35;a.vy-=ny*k*.35;a.cool[b.id]=this.t+.5;this.addEv('hit',bx,by,a.br);
+    }
+   }
+  }
+  for(const b of this.balls){
+   b.age+=dt;b.x+=b.vx*dt;b.y+=b.vy*dt;const f=Math.exp(-.8*dt);b.vx*=f;b.vy*=f;
+   const sp=Math.hypot(b.vx,b.vy);if(sp<35||!this.onIce(b.x,b.y)){b.dead=true;continue;}
+   for(const q of P){
+    if(q.st!==0||(q.id===b.owner&&b.age<.6)||(b.cool[q.id]||0)>this.t)continue;
+    const dx=q.x-b.x,dy=q.y-b.y,d=Math.hypot(dx,dy)||.01;
+    if(d<b.r+PR*.9){
+     if(q.shield>0){b.dead=true;q.shield=Math.max(0,q.shield-2);this.addEv('shield',q.x,q.y);break;}
+     const nx=(dx/d)*.4+(b.vx/sp)*.6,ny=(dy/d)*.4+(b.vy/sp)*.6,nl=Math.hypot(nx,ny)||1;
+     const k=160+b.r*9+sp*.5;q.vx+=nx/nl*k;q.vy+=ny/nl*k;q.lastHit=b.owner;q.lastHitT=this.t;
+     b.cool[q.id]=this.t+.5;b.r*=.7;b.vx*=.5;b.vy*=.5;this.addEv('hit',b.x,b.y,b.r);
+     if(b.r<5){b.dead=true;break;}
+    }
+   }
+  }
+  this.balls=this.balls.filter(b=>!b.dead);
+  if(ph==='play'&&P.filter(p=>p.st===0).length<=1)this.finishRound();
+  if(this.phase==='end'&&this.endT<=0){if(this.rd<this.rounds)this.startRound();else this.phase='over';}
+ }
+ snap(){
+  const f=v=>+v.toFixed(1);
+  return{ph:this.phase,cd:this.cd,t:this.t,rd:this.rd,rds:this.rounds,tiles:this.tiles.join(''),
+   P:this.P.map(p=>({id:p.id,x:f(p.x),y:f(p.y),a:+p.ang.toFixed(2),b:f(p.br),s:p.st,sh:f(p.shield),sp:f(p.speed),fr:f(p.frozen),k:p.kills,pl:p.place,ft:+p.fallT.toFixed(2)})),
+   B:this.balls.map(b=>({id:b.id,x:f(b.x),y:f(b.y),r:f(b.r)})),
+   U:this.ups.map(u=>({id:u.id,x:f(u.x),y:f(u.y),type:u.type})),
+   E:this.evs,sc:this.scores,w:this.winner,res:this.res};
+ }
+}
+
+/* ===== 全域狀態 ===== */
+const G={scene:'menu',role:null,sim:null,snap:null,meta:{},me:localStorage.sb_id||(localStorage.sb_id=Math.random().toString(36).slice(2,10)),
+ ptr:{x:0,y:0},hold:false,shot:0,lastEv:0,disp:{},parts:[],acc:0,sound:true,xpDone:false,lastSend:0,lastPush:0,sent:{a:0,h:0,s:0},room:null,roomId:null,db:null,lobbyCd:0};
+const cv=$('c'),ctx=cv.getContext('2d');let W=0,H=0,DPR=1,SC=1;
+function resize(){DPR=window.devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;SC=Math.min(W,H*.92)/680;}
+addEventListener('resize',resize);resize();
+
+const getXP=()=>+localStorage.sb_xp||0,getSkin=()=>+localStorage.sb_skin||0;
+const getName=()=>($('nick').value.trim()||localStorage.sb_name||('玩家'+Math.floor(Math.random()*90+10))).slice(0,8);
+$('nick').value=localStorage.sb_name||'';
+$('nick').onchange=()=>localStorage.sb_name=$('nick').value.trim();
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2600);}
+function banner(t){const e=$('banner');if(!t){e.style.display='none';return;}e.textContent=t;e.style.display='block';}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));$('top').style.display=id===null?'flex':'none';}
+function showNone(){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));$('top').style.display='flex';}
+function updXP(){$('xpInfo').textContent='XP:'+getXP()+'  ·  目前造型:'+SKINS[getSkin()].n;}
+updXP();
+document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{G.scene='menu';show('menu');});
+$('bSingle').onclick=()=>{localStorage.sb_name=getName();show('single');};
+$('bMulti').onclick=()=>{localStorage.sb_name=getName();$('netWarn').textContent=netOK()?'':'⚠️ 尚未設定 Firebase,請先貼上 FIREBASE_CONFIG';show('multi');};
+$('bHow').onclick=()=>show('how');
+$('bSkins').onclick=()=>{drawSkins();show('skins');};
+$('btnSnd').onclick=()=>{G.sound=!G.sound;$('btnSnd').textContent=G.sound?'🔊':'🔇';};
+function drawSkins(){
+ const xp=getXP();$('skXp').textContent='目前 XP:'+xp;const g=$('skGrid');g.innerHTML='';
+ SKINS.forEach((s,i)=>{const ok=xp>=s.xp,d=document.createElement('div');d.className='sk'+(getSkin()===i?' sel':'')+(ok?'':' lock');
+  d.innerHTML=`<div class="dot" style="background:${s.c}">${ok?s.a:'🔒'}</div>${s.n}<br>${ok?'已解鎖':s.xp+' XP'}`;
+  d.onclick=()=>{if(!ok)return;localStorage.sb_skin=i;drawSkins();updXP();};g.appendChild(d);});
+}
+
+/* ===== 音效 ===== */
+let AC;function beep(f,d,type,v){if(!G.sound)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(v||.07,AC.currentTime);g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+d);o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+d);}catch(e){}}
+
+/* ===== 輸入 ===== */
+function setPtr(e){const r=cv.getBoundingClientRect();G.ptr.x=(e.clientX-r.left-W/2)/SC;G.ptr.y=(e.clientY-r.top-H/2-8)/SC;}
+cv.addEventListener('pointerdown',e=>{setPtr(e);G.hold=true;cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('pointermove',e=>setPtr(e));
+const rel=()=>{if(G.hold){G.hold=false;G.shot++;}};
+cv.addEventListener('pointerup',rel);cv.addEventListener('pointercancel',rel);
+
+/* ===== 單人模式 ===== */
+$('sStart').onclick=()=>{
+ const n=+$('sBots').value,name=getName();localStorage.sb_name=name;
+ const pl=[{id:G.me,name,skin:getSkin()}];G.meta={};G.meta[G.me]={n:name,s:getSkin()};
+ const names=BOTN.slice().sort(()=>Math.random()-.5);
+ for(let i=0;i<n;i++){const id='bot'+i,sk=Math.floor(Math.random()*SKINS.length);pl.push({id,name:names[i],skin:sk,bot:true});G.meta[id]={n:names[i],s:sk};}
+ G.sim=new Sim(pl,{rounds:+$('sRounds').value,diff:$('sDiff').value});G.role='single';enterGame();
+};
+function enterGame(){
+ G.scene='game';G.snap=null;G.disp={};G.parts=[];G.lastEv=0;G.xpDone=false;G.shot=0;G.sent={a:0,h:0,s:0};G.hold=false;G.acc=0;
+ showNone();banner('');
+}
+function leaveGame(){
+ banner('');
+ if(G.roomId)leaveRoom();
+ G.scene='menu';G.sim=null;G.role=null;show('menu');updXP();
+}
+$('btnLeave').onclick=leaveGame;$('rsMenu').onclick=leaveGame;
+$('rsAgain').onclick=()=>{
+ if(G.role==='single'){$('sStart').onclick();}
+ else if(G.role==='host'){backToLobby();}
+ else{toast('等房主回到房間');}
+};
+
+/* ===== 多人連線(Firebase) ===== */
+function netOK(){return typeof firebase!=='undefined'&&FIREBASE_CONFIG.apiKey&&!FIREBASE_CONFIG.apiKey.startsWith('YOUR');}
+function db(){if(!G.db){firebase.initializeApp(FIREBASE_CONFIG);G.db=firebase.database();}return G.db;}
+const rref=()=>db().ref('rooms/'+G.roomId);
+function me(){return{n:getName(),s:getSkin(),j:Date.now()};}
+async function joinRoom(code){
+ const ref=db().ref('rooms/'+code);
+ const res=await ref.transaction(r=>{
+  if(r===null)return r;
+  if(r.status!=='waiting')return;
+  r.players=r.players||{};
+  if(!r.players[G.me]&&Object.keys(r.players).length>=r.max)return;
+  r.players[G.me]=me();return r;
+ },undefined,false);
+ const v=res.snapshot.val();
+ if(!res.committed||!v||!v.players||!v.players[G.me])return false;
+ enterRoom(code);return true;
+}
+async function createRoom(pub,rounds,max){
+ for(let i=0;i<6;i++){
+  const code=String(Math.floor(1000+Math.random()*9000));
+  const room={host:G.me,status:'waiting',public:pub,max,rounds,created:Date.now(),players:{}};room.players[G.me]=me();
+  const res=await db().ref('rooms/'+code).transaction(r=>r?undefined:room,undefined,false);
+  if(res.committed){enterRoom(code);return true;}
+ }
+ return false;
+}
+$('mCreate').onclick=async()=>{
+ if(!netOK())return toast('請先設定 Firebase');
+ localStorage.sb_name=getName();
+ try{await createRoom(false,+$('mRounds').value,+$('mMax').value)||toast('建立失敗');}catch(e){toast('連線失敗:'+e.message);}
+};
+$('mJoin').onclick=async()=>{
+ if(!netOK())return toast('請先設定 Firebase');
+ const c=$('mCode').value.trim();if(c.length!==4)return toast('請輸入4位數房號');
+ localStorage.sb_name=getName();
+ try{(await joinRoom(c))||toast('找不到房間,或房間已開始/已滿');}catch(e){toast('連線失敗:'+e.message);}
+};
+$('mQuick').onclick=async()=>{
+ if(!netOK())return toast('請先設定 Firebase');
+ localStorage.sb_name=getName();toast('尋找對手中…');
+ try{
+  const snap=await db().ref('rooms').orderByChild('public').equalTo(true).limitToLast(30).once('value');
+  const list=[];snap.forEach(s=>{const r=s.val();if(r.status==='waiting'&&Object.keys(r.players||{}).length<r.max&&Date.now()-r.created<20*60000)list.push([s.key,Object.keys(r.players).length]);});
+  list.sort((a,b)=>b[1]-a[1]);
+  for(const [code] of list){if(await joinRoom(code))return;}
+  (await createRoom(true,1,6))||toast('建立失敗');
+ }catch(e){toast('連線失敗:'+e.message);}
+};
+function enterRoom(code){
+ G.roomId=code;G.scene='lobby';G.lobbyCd=0;
+ const r=rref();
+ r.child('players/'+G.me).onDisconnect().remove();r.child('in/'+G.me).onDisconnect().remove();
+ r.on('value',onRoom);show('lobby');
+}
+function leaveRoom(){
+ const id=G.roomId;if(!id)return;const r=db().ref('rooms/'+id);
+ r.off();r.child('st').off();r.child('in').off();clearInterval(G.lobbyTimer);
+ if(G.room&&G.room.host===G.me)r.remove();else r.child('players/'+G.me).remove();
+ G.roomId=null;G.room=null;
+}
+$('lbLeave').onclick=()=>{leaveRoom();G.scene='menu';show('multi');};
+$('lbStart').onclick=()=>startHostGame();
+function onRoom(snap){
+ const r=snap.val();
+ if(!r){if(G.roomId){G.roomId=null;toast('房間已關閉');G.scene='menu';G.sim=null;banner('');show('menu');}return;}
+ G.room=r;G.meta={};Object.entries(r.players||{}).forEach(([id,v])=>G.meta[id]={n:v.n,s:v.s});
+ const host=r.host===G.me;
+ if(G.scene==='lobby'){renderLobby(r,host);}
+ if(host&&G.sim&&G.role==='host'){G.sim.P.forEach(p=>{if(!r.players[p.id])G.sim.remove(p.id);});}
+ if(!host){
+  if(r.status==='playing'&&G.scene!=='game'){
+   G.role='client';enterGame();
+   rref().child('st').on('value',s=>{const v=s.val();if(v)G.snap=JSON.parse(v);});
+  }else if(r.status==='waiting'&&G.scene==='game'){
+   rref().child('st').off();G.scene='lobby';G.snap=null;banner('');renderLobby(r,host);
+  }
+ }
+}
+function renderLobby(r,host){
+ show('lobby');$('lbCode').textContent=(r.public?'(隨機)':'#'+G.roomId);
+ $('lbInfo').textContent=(r.rounds>1?'錦標賽 3回合':'1回合')+' · 上限 '+r.max+' 人'+(r.public?'':' · 把房號分享給朋友');
+ const pl=Object.entries(r.players||{}).sort((a,b)=>a[1].j-b[1].j);
+ $('lbList').innerHTML=pl.map(([id,v])=>`<div class="pl"><span class="dot" style="background:${SKINS[v.s]?SKINS[v.s].c:'#fff'}"></span>${esc(v.n)}${id===r.host?' 👑':''}${id===G.me?' (你)':''}</div>`).join('');
+ $('lbStart').style.display=host?'':'none';$('lbStart').disabled=pl.length<2;
+ const cd=r.cd;$('lbCd').textContent=cd?('自動開始倒數 '+cd+' 秒'):(pl.length<2?'等待其他玩家加入…':(host?'':'等待房主開始…'));
+ if(host&&!G.lobbyTimer_on){G.lobbyTimer_on=true;clearInterval(G.lobbyTimer);G.lobbyTimer=setInterval(lobbyTick,1000);}
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function lobbyTick(){
+ const r=G.room;if(!r||r.host!==G.me||G.scene!=='lobby'){return;}
+ const n=Object.keys(r.players||{}).length;
+ if(!r.public)return;
+ if(n>=r.max){startHostGame();return;}
+ if(n>=2){G.lobbyCd=G.lobbyCd>0?G.lobbyCd-1:10;if(G.lobbyCd<=0){startHostGame();return;}rref().child('cd').set(G.lobbyCd);}
+ else{G.lobbyCd=0;rref().child('cd').remove();}
+}
+async function startHostGame(){
+ const r=G.room;if(!r||r.host!==G.me)return;
+ const pl=Object.entries(r.players).sort((a,b)=>a[1].j-b[1].j).map(([id,v])=>({id,name:v.n,skin:v.s}));
+ if(pl.length<2)return;
+ clearInterval(G.lobbyTimer);G.lobbyTimer_on=false;G.lobbyCd=0;
+ G.sim=new Sim(pl,{rounds:r.rounds});G.role='host';
+ await rref().update({status:'playing',cd:null,st:null,in:null});
+ rref().child('in').on('child_added',s=>G.sim&&G.sim.input(s.key,s.val()));
+ rref().child('in').on('child_changed',s=>G.sim&&G.sim.input(s.key,s.val()));
+ enterGame();
+}
+async function backToLobby(){
+ rref().child('in').off();G.sim=null;G.role=null;G.scene='lobby';banner('');
+ await rref().update({status:'waiting',st:null,in:null,cd:null});
+ renderLobby(G.room,true);
+}
+
+/* ===== 特效 ===== */
+function parts(x,y,n,c,s){for(let i=0;i<n;i++){const a=Math.random()*TAU,v=Math.random()*(s||120);G.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:.6+Math.random()*.4,c});}}
+function handleEvents(v){
+ for(const e of v.E){if(e[0]<=G.lastEv)continue;G.lastEv=e[0];const[,t,x,y,k]=e;
+  if(t==='hit'){parts(x,y,12,'#fff',160);beep(180+k*3,.15,'square',.06);}
+  else if(t==='shoot'){parts(x,y,5,'#dff',80);beep(520,.08,'triangle');}
+  else if(t==='fall'){parts(x,y,18,'#7fd3ff',200);beep(300,.4,'sine',.08);}
+  else if(t==='up'){parts(x,y,10,'#ffd54f',140);beep(880,.15,'sine');}
+  else if(t==='freeze'){parts(x,y,24,'#aef',220);beep(660,.3,'sawtooth',.04);}
+  else if(t==='shield'){parts(x,y,10,'#4df',120);beep(400,.1,'square',.05);}
+  else if(t==='go'){beep(700,.3,'triangle');}
+ }
+}
+
+/* ===== 取得畫面資料 ===== */
+function getView(dt){
+ if(G.role==='single'||G.role==='host')return G.sim.snap();
+ if(!G.snap)return null;
+ const s=G.snap,k=1-Math.exp(-dt*20),sm=(o,key)=>{let d=G.disp[key];if(!d||Math.hypot(d.x-o.x,d.y-o.y)>120)d=G.disp[key]={x:o.x,y:o.y};else{d.x+=(o.x-d.x)*k;d.y+=(o.y-d.y)*k;}return{...o,x:d.x,y:d.y};};
+ return{...s,P:s.P.map(p=>sm(p,'p'+p.id)),B:s.B.map(b=>sm(b,'b'+b.id))};
+}
+
+/* ===== 繪圖 ===== */
+function sector(r0,r1,a0,a1){ctx.beginPath();ctx.arc(0,0,r1,a0,a1);ctx.arc(0,0,r0,a1,a0,true);ctx.closePath();}
+function drawBall(x,y,r){
+ ctx.fillStyle='rgba(0,40,90,.25)';ctx.beginPath();ctx.arc(x+3,y+4,r,0,TAU);ctx.fill();
+ const g=ctx.createRadialGradient(x-r*.3,y-r*.3,r*.1,x,y,r);g.addColorStop(0,'#fff');g.addColorStop(1,'#bfe3f7');
+ ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();ctx.strokeStyle='#8cc';ctx.lineWidth=1;ctx.stroke();
+}
+function render(v,dt){
+ ctx.setTransform(DPR,0,0,DPR,0,0);
+ const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#0e5a9a');bg.addColorStop(1,'#07294d');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ ctx.setTransform(DPR*SC,0,0,DPR*SC,DPR*W/2,DPR*(H/2+8));
+ const tm=performance.now()/1000;
+ ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=2;
+ for(let i=1;i<4;i++){ctx.beginPath();ctx.arc(0,0,R+20+i*40+Math.sin(tm+i)*6,0,TAU);ctx.stroke();}
+ ctx.fillStyle='#0a3a6a';ctx.beginPath();ctx.arc(0,6,R+6,0,TAU);ctx.fill();
+ const rw=R/RINGS;
+ for(let r=0;r<RINGS;r++)for(let s=0;s<SECT;s++){
+  const st=v.tiles[r*SECT+s];if(st==='2')continue;
+  sector(r*rw,(r+1)*rw-1.5,s*TAU/SECT+.012,(s+1)*TAU/SECT-.012);
+  if(st==='1'){const f=.5+.5*Math.sin(tm*18);ctx.fillStyle=`rgb(255,${Math.floor(120+80*f)},${Math.floor(90+60*f)})`;}
+  else ctx.fillStyle=(r+s)%2?'#e9f7ff':'#d4ecfb';
+  ctx.fill();
+ }
+ for(const u of v.U){ctx.font='22px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff8';ctx.beginPath();ctx.arc(u.x,u.y,15+Math.sin(tm*4)*1.5,0,TAU);ctx.fill();ctx.fillStyle='#000';ctx.fillText(UPE[u.type],u.x,u.y+1);}
+ const ps=v.P.slice().sort((a,b)=>a.y-b.y);
+ for(const p of ps){if(p.s===2)continue;drawPlayer(p,tm);}
+ for(const b of v.B)drawBall(b.x,b.y,b.r);
+ for(const q of G.parts){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=.94;q.vy*=.94;q.l-=dt;ctx.globalAlpha=Math.max(0,q.l*1.6);ctx.fillStyle=q.c;ctx.beginPath();ctx.arc(q.x,q.y,3,0,TAU);ctx.fill();}
+ ctx.globalAlpha=1;G.parts=G.parts.filter(q=>q.l>0);
+ ctx.setTransform(DPR,0,0,DPR,0,0);drawHud(v);
+}
+function drawPlayer(p,tm){
+ const m=G.meta[p.id]||{n:'?',s:0},sk=SKINS[m.s]||SKINS[0];
+ const sc=p.s===1?Math.max(0,1-p.ft/.9):1;
+ ctx.save();ctx.translate(p.x,p.y);ctx.scale(sc,sc);ctx.globalAlpha=sc;
+ const c=Math.cos(p.a),s=Math.sin(p.a);
+ ctx.fillStyle='rgba(0,40,90,.25)';ctx.beginPath();ctx.ellipse(2,5,PR,PR*.8,0,0,TAU);ctx.fill();
+ if(p.sp>0){ctx.strokeStyle='#ffd54f';ctx.lineWidth=3;for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(-c*(22+i*7)-s*(i-1)*8,-s*(22+i*7)+c*(i-1)*8);ctx.lineTo(-c*(32+i*7)-s*(i-1)*8,-s*(32+i*7)+c*(i-1)*8);ctx.stroke();}}
+ ctx.fillStyle=sk.c;ctx.strokeStyle='#0006';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,PR,0,TAU);ctx.fill();ctx.stroke();
+ ctx.fillStyle='#fff';for(const o of[-.5,.5]){ctx.beginPath();ctx.arc(Math.cos(p.a+o)*9,Math.sin(p.a+o)*9,4.2,0,TAU);ctx.fill();}
+ ctx.fillStyle='#012';for(const o of[-.5,.5]){ctx.beginPath();ctx.arc(Math.cos(p.a+o)*10.3,Math.sin(p.a+o)*10.3,2,0,TAU);ctx.fill();}
+ if(p.b>=3)drawBall(c*(PR+p.b*.8),s*(PR+p.b*.8),p.b);
+ if(p.fr>0){ctx.fillStyle='rgba(150,220,255,.6)';ctx.beginPath();ctx.arc(0,0,PR+4,0,TAU);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();}
+ if(p.sh>0){ctx.strokeStyle=`rgba(80,220,255,${p.sh<1.5?.4+.4*Math.sin(tm*20):.9})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,PR+8,0,TAU);ctx.stroke();}
+ ctx.restore();
+ if(p.s===0){
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  if(sk.a){ctx.font='14px serif';ctx.fillText(sk.a,p.x,p.y-PR-6);}
+  ctx.font='bold 12px system-ui';ctx.fillStyle=p.id===G.me?'#ffd54f':'#fff';ctx.strokeStyle='#0008';ctx.lineWidth=3;
+  const t=(p.id===G.me?'▼ ':'')+m.n;ctx.strokeText(t,p.x,p.y-PR-20);ctx.fillText(t,p.x,p.y-PR-20);
+ }
+}
+function drawHud(v){
+ ctx.textBaseline='top';ctx.textAlign='left';ctx.fillStyle='#fff';ctx.font='bold 16px system-ui';
+ const alive=v.P.filter(p=>p.s===0).length;
+ ctx.fillText(`存活 ${alive}/${v.P.length}`+(v.rds>1?`   回合 ${v.rd}/${v.rds}`:''),12,10);
+ ctx.font='13px system-ui';
+ const list=v.P.slice().sort((a,b)=>(v.sc[b.id]||0)-(v.sc[a.id]||0));
+ list.forEach((p,i)=>{const m=G.meta[p.id]||{n:'?',s:0};ctx.globalAlpha=p.s===0?1:.45;ctx.fillStyle=(SKINS[m.s]||SKINS[0]).c;ctx.fillRect(12,34+i*18,10,10);ctx.fillStyle='#fff';ctx.fillText(m.n+(v.rds>1?'  '+(v.sc[p.id]||0)+'分':'')+(p.s!==0?' ✖':''),28,32+i*18);});
+ ctx.globalAlpha=1;
+ const mp=v.P.find(p=>p.id===G.me);
+ if(mp){
+  let y=H-30;ctx.font='bold 15px system-ui';
+  const ch=[];if(mp.sh>0)ch.push('🛡️ '+mp.sh.toFixed(1));if(mp.sp>0)ch.push('⚡ '+mp.sp.toFixed(1));if(mp.fr>0)ch.push('❄️ 被冰凍!');
+  ctx.textAlign='center';ctx.fillText(ch.join('   '),W/2,y);
+  if(mp.s!==0&&v.ph==='play'){ctx.font='bold 18px system-ui';ctx.fillText('你出局了!第 '+mp.pl+' 名(觀戰中)',W/2,H-60);}
+ }
+ ctx.textAlign='center';ctx.textBaseline='middle';
+ if(v.ph==='count'){
+  ctx.font='bold 90px system-ui';ctx.lineWidth=6;ctx.strokeStyle='#0a2a4d';
+  const t=String(Math.max(1,Math.ceil(v.cd)));
+  ctx.strokeText(t,W/2,H/2);ctx.fillStyle='#fff';ctx.fillText(t,W/2,H/2);
+  ctx.font='bold 18px system-ui';ctx.fillText('按住移動 · 放開發射雪球',W/2,H/2+70);
+ }
+}
+
+/* ===== 橫幅 / 結算 ===== */
+function setBanner(t){if(G.bt===t)return;G.bt=t;banner(t);}
+function uiState(v){
+ if(v.ph==='end'){
+  const w=v.w&&G.meta[v.w]?G.meta[v.w].n:'無';
+  const last=v.rd>=v.rds;
+  setBanner((last?'比賽結束':'第 '+v.rd+' 回合結束')+' — 勝者:'+w);
+ }else setBanner('');
+ if(v.ph==='over'&&!G.xpDone){G.xpDone=true;setBanner('');showResult(v);}
+}
+function showResult(v){
+ let order;
+ if(v.rds>1)order=v.P.slice().sort((a,b)=>(v.sc[b.id]||0)-(v.sc[a.id]||0));
+ else order=v.P.slice().sort((a,b)=>a.pl-b.pl);
+ const rank=order.findIndex(p=>p.id===G.me)+1;
+ const win=rank===1;
+ const myPts=v.sc[G.me]||0;
+ const gain=10+myPts*3+(win?30:0);
+ const old=getXP(),nw=old+gain;
+ localStorage.sb_xp=nw;
+ const unlocked=SKINS.filter(s=>s.xp>old&&s.xp<=nw).map(s=>s.n);
+ $('rsTitle').textContent=win?'🏆 你贏了!':'第 '+rank+' 名';
+ $('rsList').innerHTML=order.map((p,i)=>{
+  const m=G.meta[p.id]||{n:'?',s:0};
+  const info=v.rds>1?(v.sc[p.id]||0)+' 分':('擊落 '+p.k);
+  return `<div class="pl"><b>${i+1}.</b><span class="dot" style="background:${(SKINS[m.s]||SKINS[0]).c}"></span>${esc(m.n)}${p.id===G.me?' (你)':''}<span style="margin-left:auto;padding-left:16px">${info}</span></div>`;
+ }).join('');
+ $('rsXp').innerHTML='⭐ 獲得 '+gain+' XP(總共 '+nw+')'+(unlocked.length?'<br>🎉 解鎖新造型:'+unlocked.join('、'):'');
+ $('rsAgain').textContent=G.role==='single'?'再來一場':(G.role==='host'?'回到房間':'等房主重新開始');
+ $('rsAgain').disabled=(G.role==='client');
+ show('result');
+}
+
+/* ===== 主選單背景(下雪) ===== */
+const flakes=Array.from({length:70},()=>({x:Math.random(),y:Math.random(),s:Math.random()*2+1}));
+function drawIdle(ts){
+ ctx.setTransform(DPR,0,0,DPR,0,0);
+ const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#1976b8');bg.addColorStop(1,'#07294d');
+ ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#fff';
+ for(const f of flakes){
+  f.y+=f.s*.0006*(60/60);f.x+=Math.sin(ts/1000+f.s)*.0003;
+  if(f.y>1){f.y=0;f.x=Math.random();}
+  ctx.globalAlpha=.8;ctx.beginPath();ctx.arc(f.x*W,f.y*H,f.s,0,TAU);ctx.fill();
+ }
+ ctx.globalAlpha=1;
+}
+
+/* ===== 多人:送出輸入 ===== */
+function sendInput(i,ts){
+ const s=G.sent;
+ const changed=i.h!==s.h||i.s!==s.s||(i.h&&Math.abs(angDiff(i.a,s.a))>.05&&ts-G.lastSend>60);
+ if(changed&&G.roomId){
+  G.lastSend=ts;G.sent={a:i.a,h:i.h,s:i.s};
+  rref().child('in/'+G.me).set({a:+i.a.toFixed(2),h:i.h,s:i.s});
+ }
+}
+
+/* ===== 主迴圈 ===== */
+let lastTs=performance.now();
+function frame(ts){
+ requestAnimationFrame(frame);
+ const dt=Math.min(.05,(ts-lastTs)/1000);lastTs=ts;
+ if(G.scene!=='game'){
+  if(!G.roomId)G.lobbyTimer_on=false;
+  drawIdle(ts);return;
+ }
+ const prev=G.lastView;
+ const mp=prev&&prev.P.find(p=>p.id===G.me);
+ const ang=mp?Math.atan2(G.ptr.y-mp.y,G.ptr.x-mp.x):0;
+ const inp={a:ang,h:G.hold?1:0,s:G.shot};
+ let v;
+ if(G.role==='single'||G.role==='host'){
+  if(!G.sim)return;
+  G.sim.input(G.me,inp);
+  const fast=(G.role==='single'&&mp&&mp.s!==0&&G.sim.phase==='play')?3:1;
+  G.acc+=dt;
+  while(G.acc>=1/60){for(let i=0;i<fast;i++)G.sim.step(1/60);G.acc-=1/60;}
+  v=G.sim.snap();
+  if(G.role==='host'&&ts-G.lastPush>66){
+   G.lastPush=ts;
+   rref().child('st').set(JSON.stringify(v));
+  }
+ }else{
+  v=getView(dt);
+  sendInput(inp,ts);
+ }
+ if(!v){
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#0b3d6b';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff';ctx.font='bold 20px system-ui';ctx.textAlign='center';ctx.fillText('等待房主開始…',W/2,H/2);
+  return;
+ }
+ G.lastView=v;
+ handleEvents(v);
+ render(v,dt);
+ uiState(v);
+}
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('visibilitychange',()=>{lastTs=performance.now();});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
